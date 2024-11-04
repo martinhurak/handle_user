@@ -1,0 +1,6 @@
+django
+djangorestframework
+pandas
+django-cors-headers
+djangorestframework-simplejwt
+django-csp // Content-Security-Policy (CSP) je jedna z najúčinnejších ochranných hlavičiek. Pomáha zabrániť XSS tým, že kontroluje, odkiaľ môže prehliadač načítavať a vykonávať zdroje ako JavaScript.
