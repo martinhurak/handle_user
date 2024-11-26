@@ -192,8 +192,4 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# send email # zatial neriešim 
-#EMAIL_BACKEND = "sendgrid_backend.SendgridBackend"
-#SENDGRID_API_KEY = os.environ.get('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')
-#SENDGRID_SANDBOX_MODE_IN_DEBUG = False  # Set to True for testing without sending emails
-#SENDGRID_ECHO_TO_STDOUT = True  # Prints emails to console for debugging 
+
