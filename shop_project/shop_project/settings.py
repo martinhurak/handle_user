@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -109,7 +110,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'sk'
 
 TIME_ZONE = 'UTC'
 
@@ -189,3 +190,10 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+
+# send email # zatial neriešim 
+#EMAIL_BACKEND = "sendgrid_backend.SendgridBackend"
+#SENDGRID_API_KEY = os.environ.get('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')
+#SENDGRID_SANDBOX_MODE_IN_DEBUG = False  # Set to True for testing without sending emails
+#SENDGRID_ECHO_TO_STDOUT = True  # Prints emails to console for debugging 

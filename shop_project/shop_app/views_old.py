@@ -1,13 +1,14 @@
+'''
 #Data
 import csv
 import os
 from django.conf import settings
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
-from .serializers import CsvDataSerializer
+from .serializerss import CsvDataSerializer
 #User
 from rest_framework import generics
-from .serializers import UserSerializer
+from .serializerss import UserSerializer
 from rest_framework.permissions import AllowAny
 
 from rest_framework.views import APIView
@@ -18,8 +19,15 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.serializers import ModelSerializer
-from .serializers import UserProfileUpdateSerializer ,PasswordChangeSerializer ,RegisterSerializer
+from .serializerss import UserProfileUpdateSerializer ,PasswordChangeSerializer ,RegisterSerializer
 from django.core.exceptions import ValidationError
+
+
+# reset hesla 
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.core.mail import send_mail
+from django.urls import reverse
 # Data
 @api_view(['GET'])
 def load_csv_data(request):
@@ -100,6 +108,7 @@ class UserCreateView(APIView):
         }, status=status.HTTP_201_CREATED)
         
 ## nova registracia 
+
 class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -114,6 +123,44 @@ class RegisterView(APIView):
                 "access": str(refresh.access_token),
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+class RegisterView(APIView):
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+
+            # Generovanie JWT tokenov
+            refresh = RefreshToken.for_user(user)
+            response = Response({
+                "success": "Registrácia úspešná",
+                "access": str(refresh.access_token),
+            }, status=status.HTTP_201_CREATED)
+            
+            # Nastavenie refresh tokenu ako HttpOnly cookie
+            response.set_cookie(
+                'refresh_token',
+                str(refresh),
+                httponly=True,
+                secure=True,  # Nastaviť na True pre produkčné prostredie s HTTPS
+                samesite='Lax'
+            )
+            return response
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        response = Response({"detail": "Successfully logged out"}, status=status.HTTP_200_OK)
+        print(response)
+        # Odstránenie refresh tokenu z cookies nastavením exspirácie do minulosti
+        response.delete_cookie('refresh_token')
+        
+        return response
     
 class UserProfileSerializer(ModelSerializer):
     class Meta:
@@ -153,7 +200,7 @@ class UpdateProfileView(APIView):
             password = request.data.get('password')
             if not password:
                 return Response({"error": "Password is required"}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             try:
                 self.validate_password(password)  # Volanie validačnej funkcie
             except ValidationError as e:
@@ -165,17 +212,19 @@ class UpdateProfileView(APIView):
             # Uložíme len zmenené polia
             if 'email' in serializer.validated_data and serializer.validated_data['email'] == user.email:
                 serializer.validated_data.pop('email')
-            if 'name' in serializer.validated_data and serializer.validated_data['name'] == user.first_name:
-                serializer.validated_data.pop('name')
-
+                print(serializer.validated_data)
+            if 'username' in serializer.validated_data and serializer.validated_data['username'] == user.username:
+                
+                serializer.validated_data.pop('username')
+            
             if not serializer.validated_data:
-                return Response({"error": "No changes detected."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "No changes detected."}, status=status.HTTP_400_BAD_REQUEST) 
+                
 
             serializer.save()
             return Response({"success": "Profile updated successfully"}, status=status.HTTP_200_OK)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUES)
-    
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -186,3 +235,57 @@ class PasswordChangeView(APIView):
             serializer.save()
             return Response({"success": "Heslo bolo úspešne zmenené."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#reset pwd
+
+class PasswordResetRequestView(APIView):
+    def post(self, request):
+        email = request.data.get('email')
+        try:
+            user = User.objects.get(email=email)
+            token = PasswordResetTokenGenerator().make_token(user)
+            reset_url = request.build_absolute_uri(
+                reverse('password-reset-confirm', args=[user.pk, token])
+            )
+            send_mail(
+                'Obnovenie hesla',
+                f'Kliknite na nasledujúci odkaz pre obnovenie hesla: {reset_url}',
+                'noreply@example.com',
+                [email],
+                fail_silently=False,
+            )
+            return Response({"success": "E-mail s odkazom na obnovenie hesla bol odoslaný."}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "Tento e-mail nie je registrovaný."}, status=status.HTTP_400_BAD_REQUEST)
+class PasswordResetConfirmView(APIView):
+    def post(self, request, uidb64, token):
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({"error": "Neplatný odkaz na obnovenie hesla."}, status=status.HTTP_400_BAD_REQUEST)
+
+        token_generator = PasswordResetTokenGenerator()
+        if not token_generator.check_token(user, token):
+            return Response({"error": "Neplatný alebo exspirovaný token."}, status=status.HTTP_400_BAD_REQUEST)
+
+        new_password = request.data.get("new_password")
+        user.set_password(new_password)
+        user.save()
+        return Response({"success": "Heslo bolo úspešne zmenené."}, status=status.HTTP_200_OK)
+    
+ # delete account    
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        password = request.data.get("password")
+
+        # Overenie hesla
+        user = authenticate(username=request.user.username, password=password)
+        if user is None:
+            return Response({"error": "Nesprávne heslo"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Vymazanie účtu
+        request.user.delete()
+        return Response({"success": "Účet bol úspešne vymazaný"}, status=status.HTTP_204_NO_CONTENT)
+        '''

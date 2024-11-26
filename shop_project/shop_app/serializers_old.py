@@ -52,27 +52,34 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
-    name = serializers.CharField(source='first_name', max_length=50, required=True)
+    username = serializers.CharField(max_length=150, required=True)
 
     class Meta:
         model = User
-        fields = ['name', 'email']
+        fields = ['username', 'email']
 
     def validate_email(self, value):
         user = self.context['request'].user
+        if any(char in value for char in "<>\"'"):
+            raise serializers.ValidationError("Email contains invalid characters.")
         if value == user.email:
             raise serializers.ValidationError("The new email is the same as the current email.")
         if User.objects.filter(email=value).exclude(id=user.id).exists():
             raise serializers.ValidationError("This email is already registered by another user.")
         return value
 
-    def validate_name(self, value):
+    def validate_username(self, value):
+        user = self.context['request'].user
+        # Kontrola, či používateľské meno obsahuje neplatné znaky
         if any(char in value for char in "<>\"'"):
-            raise serializers.ValidationError("Invalid characters in name.")
+            raise serializers.ValidationError("Username contains invalid characters.")
+        # Kontrola, či meno nie je prázdne alebo len prázdne znaky
         if len(value.strip()) == 0:
-            raise serializers.ValidationError("Name cannot be empty or contain only spaces.")
+            raise serializers.ValidationError("Username cannot be empty or contain only spaces.")
+        # Overenie, či meno už nie je obsadené iným používateľom
+        if User.objects.filter(username=value).exclude(id=user.id).exists():
+            raise serializers.ValidationError("This username is already taken by another user.")
         return value
-    
     
 class PasswordChangeSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
